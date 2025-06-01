@@ -7,11 +7,11 @@
 
 import SwiftUI
 
-@main
-struct SwiftUI_class_final_projectApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
+//@main
+//struct SwiftUI_class_final_projectApp: App {
+//    var body: some Scene {
+//        WindowGroup {
+//            ContentView()
+//        }
+//    }
+//}
