@@ -105,42 +105,22 @@ class HistoryViewModel: ObservableObject {
 struct HistoryView: View {
     @EnvironmentObject var historyVM: HistoryViewModel
     @State private var showClearAlert = false
-    
+    @State private var animateCards = false
+
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(historyVM.cards) { card in
-                    NavigationLink(destination: HistoryDetailView(card: card)) {
-                        HStack {
-                            if let img = card.image {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .cornerRadius(8)
-                                    .clipped()
-                            } else {
-                                Image(systemName: "fork.knife.circle.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 50, height: 50)
-                                    .foregroundColor(.black)
-                                    .padding(10)
-                            }
-
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("過敏原：\(card.allergens.joined(separator: "、"))")
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                Text("點擊查看詳細分析")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(Array(historyVM.cards.enumerated()), id: \.element.id) { index, card in
+                        NavigationLink(destination: HistoryDetailView(card: card)) {
+                            HistoryCardRow(card: card)
+                                .opacity(animateCards ? 1 : 0)
+                                .offset(x: animateCards ? 0 : 100)
+                                .animation(.easeOut(duration: 0.45).delay(Double(index) * 0.12), value: animateCards)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
+                .padding()
             }
             .navigationTitle("分析紀錄")
             .toolbar {
@@ -158,9 +138,54 @@ struct HistoryView: View {
                 }
                 Button("取消", role: .cancel) { }
             }
+            .onAppear {
+                animateCards = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    animateCards = true
+                }
+            }
         }
     }
 }
+
+struct HistoryCardRow: View {
+    let card: HistoryCard
+
+    var body: some View {
+        HStack {
+            if let img = card.image {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 60, height: 60)
+                    .cornerRadius(8)
+                    .clipped()
+            } else {
+                Image(systemName: "fork.knife.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 50, height: 50)
+                    .foregroundColor(.black)
+                    .padding(10)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("過敏原：\(card.allergens.joined(separator: "、"))")
+                    .font(.subheadline)
+                    .lineLimit(1)
+                Text("點擊查看詳細分析")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            Spacer()
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
+        .shadow(color: .gray.opacity(0.1), radius: 1, x: 0, y: 1)
+    }
+}
+
 
 // 顯示單一紀錄詳細資訊
 struct HistoryDetailView: View {

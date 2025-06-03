@@ -72,8 +72,8 @@ struct AnalysisView: View {
                               let uiImage = UIImage(data: data) else {
                             return
                         }
-                        let resized = uiImage.resized(toMaxLength: 256)
-                        guard let compressed = resized.jpegData(compressionQuality: 0.2), compressed.count < 1_000_000 else {
+                        let resized = uiImage.resized(toMaxLength: 200)
+                        guard let compressed = resized.jpegData(compressionQuality: 0.1), compressed.count < 1_000_000 else {
                             return
                         }
                         image = resized
@@ -145,7 +145,8 @@ struct AnalysisView: View {
                 isError = false
                 historyVM.addCard(image: image, result: text, allergens: allergensSelection)
             case .failure(let error):
-                resultText = "錯誤：\(error.localizedDescription)\n請點擊「再試一次」"
+//                resultText = "錯誤：\(error.localizedDescription)\n請點擊「再試一次」"
+                resultText = "請點擊「再試一次」"
                 isError = true
             }
         }
@@ -269,7 +270,7 @@ class GeminiService {
     }
 
     private static func send(body: [String: Any], completion: @escaping (Result<String, Error>) -> Void) {
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=\(apiKey)"),
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=\(apiKey)"),
               let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
             completion(.failure(NSError(domain: "InvalidRequest", code: 0)))
             return

@@ -16,6 +16,7 @@ struct SafetyEatApp: App {
 // 啟動畫面：顯示 logo 和一句標語後跳轉進入主頁面
 struct SplashView: View {
     @State private var isActive = false
+    @State private var rotationAngle: Double = 0
 
     var body: some View {
         if isActive {
@@ -31,6 +32,7 @@ struct SplashView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 120)
+                        .rotationEffect(.degrees(rotationAngle))
                 }
                 Text("每一口安心，從看懂配料表開始")
                     .font(.headline)
@@ -41,8 +43,14 @@ struct SplashView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.pink)
             .onAppear {
+                withAnimation(.easeInOut(duration: 1.5)) {
+                    rotationAngle = 360
+                }
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    withAnimation { isActive = true }
+                    withAnimation {
+                        isActive = true
+                    }
                 }
             }
         }

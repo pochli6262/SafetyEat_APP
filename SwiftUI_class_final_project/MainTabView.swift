@@ -13,6 +13,11 @@ struct MainEntryView: View {
                 .tabItem {
                     Label("記錄", systemImage: "clock")
                 }
+            
+            DietAnalysisView() // ← 新增這一頁
+                .tabItem {
+                    Label("飲食", systemImage: "fork.knife.circle")
+                }
         }
     }
 }
