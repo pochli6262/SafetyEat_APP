@@ -122,7 +122,6 @@ struct AnalysisView: View {
         resultText = ""
         isError = false
         isLoading = true
-        retryCount += 1
         loadAllergens()
 
         if mode == .image, let image = image {
@@ -144,10 +143,12 @@ struct AnalysisView: View {
                 resultText = text
                 isError = false
                 historyVM.addCard(image: image, result: text, allergens: allergensSelection)
+                retryCount = 0
             case .failure(let error):
                 resultText = "錯誤：\(error.localizedDescription)\n請點擊「再試一次」"
 //                resultText = "請點擊「再試一次」"
                 isError = true
+                retryCount += 1
             }
         }
     }
