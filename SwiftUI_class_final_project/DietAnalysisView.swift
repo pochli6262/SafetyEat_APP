@@ -8,16 +8,26 @@ struct DietAnalysisView: View {
         case 早餐, 午餐, 晚餐
     }
 
+    @AppStorage("gender") private var selectedGender: String = "男性"
+    @AppStorage("activity") private var selectedActivityLevel: String = "中等"
+    @AppStorage("height") private var heightText: String = ""
+    @AppStorage("weight") private var weightText: String = ""
+
+    
     @State private var mealImages: [MealType: UIImage] = [:]
     @State private var mealNutrition: [MealType: NutritionInfo] = [:]
     @State private var isLoading: Bool = false
     @State private var analysisResult: String = ""
     @State private var errorMessage: String?
+    
+    @State private var isAnalyzingHealth: Bool = false
+
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // 圖片輸入區略
                     ForEach(MealType.allCases, id: \.self) { type in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
@@ -66,7 +76,7 @@ struct DietAnalysisView: View {
                         .cornerRadius(12)
                         .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 2)
                     }
-                    
+
                     if hasUploadedImages() {
                         Button("再試一次") {
                             Task {
@@ -85,44 +95,73 @@ struct DietAnalysisView: View {
                         .buttonStyle(.bordered)
                     }
 
-
                     if isLoading {
                         ProgressView("分析中...").padding()
                     }
+                    
+
 
                     if !mealNutrition.isEmpty {
-                        Text("📊 一日累積營養素")
+                        Text("📊 一日攝取量占建議攝取百分比")
                             .font(.title3.bold())
-                            .padding(.top)
 
                         let nutritionOrder = ["熱量", "蛋白質", "脂肪", "碳水化合物", "糖", "鈉"]
 
-                        Chart(groupedNutritionItems().sorted {
-                            nutritionOrder.firstIndex(of: $0.name) ?? 0
-                            < nutritionOrder.firstIndex(of: $1.name) ?? 0
-                        }) { item in
-                            BarMark(
-                                x: .value("營養素", item.name),
-                                y: .value("攝取量", item.value)
-                            )
-                            .foregroundStyle(by: .value("餐別", item.mealType.rawValue))
+                        if percentageNutritionItems().isEmpty {
+                            Text("⚠️ 請輸入有效的身高與體重，並上傳至少一餐圖片")
+                                .foregroundColor(.gray)
+                        } else {
+                            Chart(percentageNutritionItems().sorted {
+                                nutritionOrder.firstIndex(of: $0.name) ?? 0 < nutritionOrder.firstIndex(of: $1.name) ?? 0
+                            }) { item in
+
+                                // 🔲 背景：建議攝取量的框（100% 高度）
+                                RectangleMark(
+                                    x: .value("營養素", item.name),
+                                    yStart: .value("建議底部", 0),
+                                    yEnd: .value("建議上限", 100)
+                                )
+                                .foregroundStyle(Color.gray.opacity(0.15))
+                                .cornerRadius(4)
+
+                                // 🟦 前景：實際攝取量（可超出 100%）
+                                BarMark(
+                                    x: .value("營養素", item.name),
+                                    y: .value("攝取百分比", item.value)
+                                )
+                                .foregroundStyle(by: .value("餐別", item.mealType.rawValue))
+                            }
+                            .frame(height: 300)
+                            .padding(.horizontal)
+
+
                         }
-                        .frame(height: 300)
-                        .padding(.horizontal)
                     }
 
+                    // 分析按鈕與結果區
                     Button("分析今日飲食是否健康") {
                         Task {
-                            isLoading = true
+                            isAnalyzingHealth = true
                             analysisResult = ""
                             errorMessage = nil
                             let total = combinedNutritionDict()
-                            analysisResult = await analyzeHealth(for: total)
-                            isLoading = false
+                            analysisResult = await analyzeHealth(
+                                for: total,
+                                gender: selectedGender,
+                                height: heightText,
+                                weight: weightText
+                            )
+                            isAnalyzingHealth = false
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .padding(.top)
+                    
+                    if isAnalyzingHealth {
+                        ProgressView("AI 分析中...")
+                            .padding(.top)
+                    }
+
 
                     if !analysisResult.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -130,12 +169,11 @@ struct DietAnalysisView: View {
                                 .font(.headline)
 
                             Markdown(analysisResult)
-                                    .padding()
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(10)
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
                         }
                     }
-
 
                     if let error = errorMessage {
                         Text(error)
@@ -150,11 +188,62 @@ struct DietAnalysisView: View {
             .navigationTitle("🍱 飲食分析助手")
         }
     }
-    
+
+    func percentageNutritionItems() -> [ColoredNutritionItem] {
+        guard let height = Double(heightText),
+              let weight = Double(weightText) else {
+            return []
+        }
+
+        let recommended = calculateRecommendedIntake(
+            gender: selectedGender,
+            heightCM: height,
+            weightKG: weight,
+            activityLevel: activityFactor(for: selectedActivityLevel)
+        )
+
+        var result: [ColoredNutritionItem] = []
+        for (meal, info) in mealNutrition {
+            for (k, v) in info.numericDict() {
+                if let base = recommended[k], base > 0 {
+                    let percent = min((v / base) * 100, 200)
+                    result.append(ColoredNutritionItem(mealType: meal, name: k, value: percent))
+                }
+            }
+        }
+        return result
+    }
+
+    func calculateRecommendedIntake(gender: String, heightCM: Double, weightKG: Double, activityLevel: Double) -> [String: Double] {
+        let bmr: Double = gender == "男性" ?
+            66 + 13.7 * weightKG + 5 * heightCM - 6.8 * 30 :
+            655 + 9.6 * weightKG + 1.8 * heightCM - 4.7 * 30
+
+        let tdee = bmr * activityLevel
+
+        return [
+            "熱量": tdee,
+            "蛋白質": weightKG * 1.2,
+            "脂肪": tdee * 0.25 / 9,
+            "碳水化合物": tdee * 0.55 / 4,
+            "糖": 50,
+            "鈉": 2000
+        ]
+    }
+
+    func activityFactor(for level: String) -> Double {
+        switch level {
+        case "久坐": return 1.2
+        case "輕度": return 1.375
+        case "中等": return 1.55
+        case "激烈": return 1.725
+        default: return 1.2
+        }
+    }
+
     func hasUploadedImages() -> Bool {
         !mealImages.isEmpty
     }
-
 
     func iconName(for type: MealType) -> String {
         switch type {
@@ -164,17 +253,13 @@ struct DietAnalysisView: View {
         }
     }
 
-
-    // 把每一餐轉換成帶有類別的營養項目
     func groupedNutritionItems() -> [ColoredNutritionItem] {
         var result: [ColoredNutritionItem] = []
-
         for (meal, info) in mealNutrition {
             for (k, v) in info.numericDict() {
                 result.append(ColoredNutritionItem(mealType: meal, name: k, value: v))
             }
         }
-
         return result
     }
 
@@ -189,7 +274,7 @@ struct DietAnalysisView: View {
     }
 
     func analyzeImage(_ image: UIImage) async -> NutritionInfo? {
-        let resized = image.resized(toMaxSide:  200)
+        let resized = image.resized(toMaxSide: 200)
         guard let data = resized.jpegData(compressionQuality: 0.1) else { return nil }
         let base64 = data.base64EncodedString()
 
@@ -221,7 +306,7 @@ struct DietAnalysisView: View {
             ]]
         ]
 
-        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=AIzaSyBllZRcAOOLyfQpL_WdSIjrnoHw_WHH2uU")!)
+        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=AIzaSyBllZRcAOOLyfQpL_WdSIjrnoHw_WHH2uU")!) // 換成你的 API Key
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -238,24 +323,27 @@ struct DietAnalysisView: View {
         else {
             return nil
         }
-        print(fullText)
 
         return result["營養標示"]
     }
 
-    func analyzeHealth(for nutrition: [String: Double]) async -> String {
+    func analyzeHealth(for nutrition: [String: Double], gender: String, height: String, weight: String) async -> String {
         let formatted = nutrition.map { "\($0.key)：\($0.value)" }.joined(separator: "\n")
 
         let prompt = """
-        以下是一整天的營養攝取量，請你扮演一位營養師，用繁體中文 **以 Markdown 格式回覆分析報告**，客觀分析一位身高體重皆為平均值的成年男性是否營養均衡，直接回答就好，若有攝取過多或不足的部分，請具體指出。
+以下是一整天的營養攝取量，請你扮演一位營養師，用繁體中文 **以 Markdown 格式回覆分析報告**，分析以下這位使用者的營養攝取是否均衡，若有攝取過多或不足，請具體指出。
 
-        建議每日營養標準可參考台灣衛福部。
+使用者資料：
+- 性別：\(gender)
+- 身高：\(height) 公分
+- 體重：\(weight) 公斤
 
-        資料如下：
+每日建議攝取量可參考台灣衛福部標準。
 
-        \(formatted)
-        """
+營養攝取資料如下：
 
+\(formatted)
+"""
 
         let body: [String: Any] = [
             "contents": [[
@@ -264,7 +352,7 @@ struct DietAnalysisView: View {
             ]]
         ]
 
-        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=AIzaSyBllZRcAOOLyfQpL_WdSIjrnoHw_WHH2uU")!)
+        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=AIzaSyBllZRcAOOLyfQpL_WdSIjrnoHw_WHH2uU")!) // 換成你的 API Key
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -288,16 +376,12 @@ struct DietAnalysisView: View {
         }
 
         let substring = text[start.lowerBound...end.upperBound]
-
-        // ✅ 嘗試 decode 確保是有效 JSON
         if let data = substring.data(using: .utf8),
            let _ = try? JSONSerialization.jsonObject(with: data) {
             return String(substring)
         }
-
         return nil
     }
-
 }
 
 struct ColoredNutritionItem: Identifiable {
@@ -331,9 +415,7 @@ struct NutritionInfo: Codable {
             "鈉": extractNumber(鈉)
         ]
     }
-
 }
-
 
 import UIKit
 
@@ -351,4 +433,3 @@ extension UIImage {
         }
     }
 }
-

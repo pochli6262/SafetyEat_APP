@@ -8,7 +8,7 @@ struct SafetyEatApp: App {
     var body: some Scene {
         WindowGroup {
             SplashView()
-                .environmentObject(historyVM) // ✅ 注入
+                .environmentObject(historyVM)
         }
     }
 }

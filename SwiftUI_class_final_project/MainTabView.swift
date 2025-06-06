@@ -18,6 +18,11 @@ struct MainEntryView: View {
                 .tabItem {
                     Label("飲食", systemImage: "fork.knife.circle")
                 }
+            
+            UserInfoView()
+                .tabItem {
+                    Label("設定", systemImage: "person.circle")
+                }
         }
     }
 }

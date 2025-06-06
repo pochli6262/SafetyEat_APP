@@ -145,8 +145,8 @@ struct AnalysisView: View {
                 isError = false
                 historyVM.addCard(image: image, result: text, allergens: allergensSelection)
             case .failure(let error):
-//                resultText = "錯誤：\(error.localizedDescription)\n請點擊「再試一次」"
-                resultText = "請點擊「再試一次」"
+                resultText = "錯誤：\(error.localizedDescription)\n請點擊「再試一次」"
+//                resultText = "請點擊「再試一次」"
                 isError = true
             }
         }

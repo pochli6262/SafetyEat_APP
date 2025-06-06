@@ -38,6 +38,9 @@ class HistoryViewModel: ObservableObject {
     
     init() {
         load()
+        
+        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.path
+        print("📁 Documents 路徑：\(path)")
     }
     
     func addCard(image: UIImage?, result: String, allergens: [String]) {
